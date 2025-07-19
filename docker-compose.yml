@@ -4,33 +4,18 @@ services:
       context: . # Build the image from the current directory (where Dockerfile is located)
       dockerfile: ./server/Dockerfile
     ports:
-      - "5001:3001" # Map host port 3000 to container port 3000
-    # depends_on:
-    #   - db # Ensure the database service starts before the Node.js app
+      - "3001:3001" # Keep backend exposed on 3001
     environment:
-      DATABASE_URL: prisma+postgres://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqd3RfaWQiOjEsInNlY3VyZV9rZXkiOiJza18tSGtxWDFBTVV6UEhnVmZGRWRDbmwiLCJhcGlfa2V5IjoiMDFKWlgxRUdKUUtOM0tSNjdZRUJWMU1KRk4iLCJ0ZW5hbnRfaWQiOiJmMzNlNDcyYmM0Y2Y5M2Y1YWY2NTdiZDc5OGU2NjRkYzI3ZTdmNzBiZmYwNjFjZDlmYjE1MjYxY2RlYzE1MzQ2IiwiaW50ZXJuYWxfc2VjcmV0IjoiN2YxZTI5NDgtNmZlNS00YTczLWI5N2EtNjcxNDkzMTZiNTlkIn0.QZEh5zKVA8g-HLxZX0Keq3Huc3ert87nd6yiS0bxtVE # Connection string for Node.js app
+      DATABASE_URL: postgresql://kidwalks_db:my_kidwalks@kidwalks-postgres-db.cneus2kmm5hx.us-east-2.rds.amazonaws.com:5432/kidwalks_db
 
   client:
     build:
       context: .
       dockerfile: ./client/Dockerfile
     ports:
-      - "8080:3000"
+      - "3000:3000" # Serve frontend on port 80 (public access)
     depends_on:
       - server
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:5001
-  # PostgreSQL database service
-  # db:
-  #   image: postgres:latest # Use a specific PostgreSQL image
-  #   environment:
-  #     - POSTGRES_DB=my_database # Database name
-  #     - POSTGRES_USER=db_user # Database user
-  #     - POSTGRES_PASSWORD=my_password # Database password
-  #   volumes:
-  #     - db:/var/lib/postgresql/data # Persist database data in a named volume
-  #   ports:
-  #     - 5433:5432
+      NEXT_PUBLIC_API_BASE_URL: http://3.140.15.162:3001
 
-  # volumes:
-  #   db: # Define the named volume for database data persistence
