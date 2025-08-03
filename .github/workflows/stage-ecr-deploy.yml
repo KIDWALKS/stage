@@ -19,9 +19,7 @@ jobs:
 
       - name: 🏷️ Set and export VERSION_TAG
         run: |
-          VERSION_TAG="${GITHUB_REF#refs/tags/}"
-          echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
-          echo "✅ VERSION_TAG=$VERSION_TAG"
+          echo "VERSION_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: 🔐 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -37,14 +35,15 @@ jobs:
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          VERSION_TAG: ${{ env.VERSION_TAG }}
         run: |
-          docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:${VERSION_TAG} -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
-          docker build -t $ECR_REGISTRY/$SERVER_IMAGE:${VERSION_TAG} -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
+          docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
+          docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
 
-          docker push $ECR_REGISTRY/$CLIENT_IMAGE:${VERSION_TAG}
+          docker push $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
 
-          docker push $ECR_REGISTRY/$SERVER_IMAGE:${VERSION_TAG}
+          docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
 
       - name: 🚀 SSH to EC2 and Deploy Stage
@@ -56,7 +55,9 @@ jobs:
           script: |
             export AWS_REGION=${{ secrets.AWS_REGION }}
             export ECR_REGISTRY=${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            export VERSION_TAG=${VERSION_TAG}
+            export CLIENT_IMAGE=inventoryapp-client-stage
+            export SERVER_IMAGE=inventoryapp-server-stage
+            export VERSION_TAG="${GITHUB_REF#refs/tags/}"
 
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
