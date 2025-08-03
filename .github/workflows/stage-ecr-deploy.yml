@@ -5,41 +5,35 @@ on:
     tags:
       - 'v*'  # triggers on v1.0.0, v2.3.1 etc.
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-  CLIENT_IMAGE: inventoryapp-client-stage
-  SERVER_IMAGE: inventoryapp-server-stage
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
+    env:  # move here (inside jobs.build-and-deploy)
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+      CLIENT_IMAGE: inventoryapp-client-stage
+      SERVER_IMAGE: inventoryapp-server-stage
 
     steps:
       - name: 🧾 Checkout code
         uses: actions/checkout@v3
 
       - name: 🏷️ Set and export VERSION_TAG
-        run: |
-          echo "VERSION_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+        run: echo "VERSION_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: 🔐 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: us-east-1
+        #   aws-region: ${{ env.AWS_REGION }}
 
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: 🐳 Build and Push Docker Images with Version Tags
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          CLIENT_IMAGE: ${{ env.CLIENT_IMAGE }}
-          SERVER_IMAGE: ${{ env.SERVER_IMAGE }}
-          VERSION_TAG: ${{ env.VERSION_TAG }}
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
@@ -57,11 +51,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            export AWS_REGION=${{ secrets.AWS_REGION }}
-            export ECR_REGISTRY=${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            export CLIENT_IMAGE=inventoryapp-client-stage
-            export SERVER_IMAGE=inventoryapp-server-stage
-            export VERSION_TAG="${GITHUB_REF#refs/tags/}"
+            export AWS_REGION=${{ env.AWS_REGION }}
+            export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+            export VERSION_TAG=${{ env.VERSION_TAG }}
 
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
