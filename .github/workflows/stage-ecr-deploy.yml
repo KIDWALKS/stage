@@ -54,40 +54,40 @@ jobs:
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             export VERSION_TAG="${GITHUB_REF#refs/tags/}"
 
-            # Login to ECR
+            echo "🔐 Logging into ECR..."
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            # Pull the latest images
+            echo "📦 Pulling stage images..."
             docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
             docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
 
-            # Navigate to project directory
+            echo "📁 Setting up deployment directory..."
             mkdir -p ~/kidwalksapparells-inventory-stage
             cd ~/kidwalksapparells-inventory-stage
 
-            # Download docker-compose.yml from the repository
-            curl -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
+            echo "📄 Fetching latest docker-compose.yml..."
+            curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
 
-            # Stop existing containers
+            echo "🛑 Stopping previous containers..."
             docker-compose down || true
 
-            # Deploy with docker-compose using versioned images
+            echo "🚀 Starting new containers..."
             ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG docker-compose up -d
 
             echo "✅ Stage Deployment Complete: Version $VERSION_TAG"
             echo "🌐 Client: https://${{ secrets.STAGE_DOMAIN }}"
             echo "🔧 Server: http://localhost:3101"
-                        echo "🩺 Checking container health and logs..."
 
-            echo "📦 Listing running containers:"
+            echo "🩺 Checking running containers..."
             docker ps
 
-            echo "📜 Last 10 lines of client logs:"
-            docker logs --tail=10 stage-client || echo "No client logs yet"
+            echo "📜 Getting client container logs..."
+            CLIENT_CONTAINER=$(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
+            docker logs --tail=10 "$CLIENT_CONTAINER" || echo "No client logs found"
 
-            echo "📜 Last 10 lines of server logs:"
-            docker logs --tail=10 stage-server || echo "No server logs yet"
+            echo "📜 Getting server container logs..."
+            SERVER_CONTAINER=$(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
+            docker logs --tail=10 "$SERVER_CONTAINER" || echo "No server logs found"
 
             echo "🔗 Access Stage Client: https://${{ secrets.STAGE_DOMAIN }}"
-            echo "🔗 Stage Server running on localhost:3101"
-
+            echo "🔗 Stage Server (API): http://localhost:3101"
