@@ -38,7 +38,7 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:${VERSION_TAG} -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:${VERSION_TAG} -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
-          
+
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:${VERSION_TAG}
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
 
@@ -54,7 +54,7 @@ jobs:
           script: |
             export AWS_REGION=${{ secrets.AWS_REGION }}
             export ECR_REGISTRY=${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            export VERSION_TAG=${VERSION_TAG}
+            export VERSION_TAG=${{ env.VERSION_TAG }}
 
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
