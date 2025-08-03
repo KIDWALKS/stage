@@ -6,8 +6,6 @@ on:
       - 'v*'  # triggers on v1.0.0, v2.3.1 etc.
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
   CLIENT_IMAGE: inventoryapp-client-stage
   SERVER_IMAGE: inventoryapp-server-stage
 
@@ -19,6 +17,12 @@ jobs:
       - name: 🧾 Checkout code
         uses: actions/checkout@v3
 
+      - name: 🏷️ Set and export VERSION_TAG
+        run: |
+          VERSION_TAG="${GITHUB_REF#refs/tags/}"
+          echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
+          echo "✅ VERSION_TAG=$VERSION_TAG"
+
       - name: 🔐 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -27,14 +31,12 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: 🔐 Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 🏷️ Set version tag
-        id: vars
-        run: echo "VERSION_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
       - name: 🐳 Build and Push Docker Images with Version Tags
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:${VERSION_TAG} -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:${VERSION_TAG} -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
@@ -54,19 +56,19 @@ jobs:
           script: |
             export AWS_REGION=${{ secrets.AWS_REGION }}
             export ECR_REGISTRY=${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            export VERSION_TAG=${{ env.VERSION_TAG }}
+            export VERSION_TAG=${VERSION_TAG}
 
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            docker pull $ECR_REGISTRY/inventoryapp-client-stage:${VERSION_TAG}
-            docker pull $ECR_REGISTRY/inventoryapp-server-stage:${VERSION_TAG}
+            docker pull $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
+            docker pull $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
 
             cd ~/kidwalksapparells-inventory
 
             docker stop client || true && docker rm client || true
             docker stop server || true && docker rm server || true
 
-            docker run -d --name client -p 3100:3000 $ECR_REGISTRY/inventoryapp-client-stage:${VERSION_TAG}
-            docker run -d --name server -p 3101:3001 $ECR_REGISTRY/inventoryapp-server-stage:${VERSION_TAG}
+            docker run -d --name client -p 3100:3000 $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
+            docker run -d --name server -p 3101:3001 $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
 
-            # NGINX + SSL (same as before)
+            echo "✅ Deployment complete for version $VERSION_TAG"
