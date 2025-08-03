@@ -1,21 +1,16 @@
 services:
   server:
-    build:
-      context: . # Build the image from the current directory (where Dockerfile is located)
-      dockerfile: ./server/Dockerfile
+    image: ${ECR_REGISTRY}/inventoryapp-server-stage:${VERSION_TAG:-latest}
     ports:
-      - "3001:3001" # Keep backend exposed on 3001
+      - "3101:3001" # Expose backend on host port 3101
     environment:
       DATABASE_URL: postgresql://kidwalks_db:my_kidwalks@kidwalks-postgres-db.cneus2kmm5hx.us-east-2.rds.amazonaws.com:5432/kidwalks_db
 
   client:
-    build:
-      context: .
-      dockerfile: ./client/Dockerfile
+    image: ${ECR_REGISTRY}/inventoryapp-client-stage:${VERSION_TAG:-latest}
     ports:
-      - "3000:3000" # Serve frontend on port 80 (public access)
+      - "3100:3000" # Expose frontend on host port 3100 to match Nginx
     depends_on:
       - server
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://3.140.15.162:3001
-
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3101

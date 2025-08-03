@@ -52,22 +52,42 @@ jobs:
           script: |
             export AWS_REGION="${{ secrets.AWS_REGION }}"
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
-            export CLIENT_IMAGE=inventoryapp-client-stage
-            export SERVER_IMAGE=inventoryapp-server-stage
             export VERSION_TAG="${GITHUB_REF#refs/tags/}"
 
+            # Login to ECR
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            docker pull $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
-            docker pull $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
+            # Pull the latest images
+            docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
+            docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
 
+            # Navigate to project directory
             mkdir -p ~/kidwalksapparells-inventory-stage
             cd ~/kidwalksapparells-inventory-stage
 
-            docker stop stage-client || true && docker rm stage-client || true
-            docker stop stage-server || true && docker rm stage-server || true
+            # Download docker-compose.yml from the repository
+            curl -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
 
-            docker run -d --name stage-client -p 3100:3000 $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
-            docker run -d --name stage-server -p 3101:3001 $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
+            # Stop existing containers
+            docker-compose down || true
+
+            # Deploy with docker-compose using versioned images
+            ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG docker-compose up -d
 
             echo "✅ Stage Deployment Complete: Version $VERSION_TAG"
+            echo "🌐 Client: https://${{ secrets.STAGE_DOMAIN }}"
+            echo "🔧 Server: http://localhost:3101"
+                        echo "🩺 Checking container health and logs..."
+
+            echo "📦 Listing running containers:"
+            docker ps
+
+            echo "📜 Last 10 lines of client logs:"
+            docker logs --tail=10 stage-client || echo "No client logs yet"
+
+            echo "📜 Last 10 lines of server logs:"
+            docker logs --tail=10 stage-server || echo "No server logs yet"
+
+            echo "🔗 Access Stage Client: https://${{ secrets.STAGE_DOMAIN }}"
+            echo "🔗 Stage Server running on localhost:3101"
+
