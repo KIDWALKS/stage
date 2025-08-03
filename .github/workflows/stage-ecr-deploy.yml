@@ -6,6 +6,8 @@ on:
       - 'v*'  # triggers on v1.0.0, v2.3.1 etc.
 
 env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
   CLIENT_IMAGE: inventoryapp-client-stage
   SERVER_IMAGE: inventoryapp-server-stage
 
