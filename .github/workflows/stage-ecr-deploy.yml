@@ -82,8 +82,11 @@ jobs:
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             export NEXT_PUBLIC_API_BASE_URL="https://${{ secrets.STAGE_DOMAIN }}"
 
-            echo "🧹 Cleaning up old Docker containers, networks, and images (volumes are safe)..."
-            docker system prune -af --volumes=false || true
+            echo "🧹 Cleaning up old stage Docker containers and images..."
+            docker ps -a --filter "name=inventory-stage" --format "{{.ID}}" | xargs -r docker rm -f
+            docker images --filter=reference="*/inventoryapp-*-stage:*" --format "{{.Repository}}:{{.Tag}}" | xargs -r docker rmi -f
+            docker image prune -f || true
+            docker container prune -f || true
 
             echo "🔐 Logging into ECR..."
             aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
