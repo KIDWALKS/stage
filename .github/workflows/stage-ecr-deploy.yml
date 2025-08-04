@@ -105,18 +105,26 @@ jobs:
             echo "⬇️ Fetching latest docker-compose.yml..."
             curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml || { echo "❌ Failed to fetch docker-compose.yml"; exit 1; }
 
+            echo "🧽 Removing existing .env if present..."
+            rm -f .env
+
+            echo "📝 Creating .env file..."
+            cat <<EOF > .env
+            VERSION_TAG=${VERSION_TAG}
+            DATABASE_URL=${DATABASE_URL}
+            NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+            AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+            ECR_REGISTRY=${ECR_REGISTRY}
+            AWS_REGION=${AWS_REGION}
+            AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
+            EOF
+            AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
             echo "🛑 Stopping existing containers..."
             docker compose down || true
 
             echo "🚀 Starting new containers..."
-            if ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG \
-              DATABASE_URL=$DATABASE_URL \
-              NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
-              AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-              AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-              AWS_REGION=$AWS_REGION \
-              AWS_S3_BUCKET_NAME=$AWS_S3_BUCKET_NAME \
-              docker compose up -d; then
+            if docker compose up -d; then
               echo "✅ Stage containers started successfully."
             else
               echo "❌ Failed to start stage containers."
