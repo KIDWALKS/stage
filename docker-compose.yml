@@ -1,16 +1,22 @@
+version: '3.8'
+
 services:
   server:
     image: ${ECR_REGISTRY}/inventoryapp-server-stage:${VERSION_TAG:-latest}
     ports:
-      - "3101:3001" # Expose backend on host port 3101
+      - "3101:3001"
     environment:
-      DATABASE_URL: postgresql://kidwalks_db:my_kidwalks@kidwalks-postgres-db.cneus2kmm5hx.us-east-2.rds.amazonaws.com:5432/kidwalks_db
+      DATABASE_URL: ${DATABASE_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
 
   client:
     image: ${ECR_REGISTRY}/inventoryapp-client-stage:${VERSION_TAG:-latest}
     ports:
-      - "3100:3000" # Expose frontend on host port 3100 to match Nginx
+      - "3100:3000"
     depends_on:
       - server
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3101
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}

@@ -32,7 +32,7 @@ jobs:
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 📊 SonarCloud Scan (with sonar-project.properties)
+      - name: 📊 SonarCloud Scan (optional)
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -48,7 +48,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
 
-      - name: 🛡️ Run Trivy Vulnerability Scan (Client)
+      - name: 🛡️ Trivy Scan (Client)
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
         with:
@@ -56,7 +56,7 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
 
-      - name: 🛡️ Run Trivy Vulnerability Scan (Server)
+      - name: 🛡️ Trivy Scan (Server)
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
         with:
@@ -64,49 +64,63 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
 
-      - name: 📤 Push Docker Images to Amazon ECR
+      - name: 📤 Push Docker Images to ECR
         run: |
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
           docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
 
-      - name: 🚀 Deploy and Start Containers via SSH
+      - name: 🚀 Deploy to EC2 via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            export AWS_REGION="${{ secrets.AWS_REGION }}"
-            export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             export VERSION_TAG="${GITHUB_REF#refs/tags/}"
+            export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
 
             echo "🔐 Logging into ECR..."
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
 
             echo "📥 Pulling images..."
             docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
             docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
 
-            echo "📂 Preparing deployment..."
+            echo "📂 Preparing deployment directory..."
             mkdir -p ~/kidwalksapparells-inventory-stage
             cd ~/kidwalksapparells-inventory-stage
 
-            echo "⬇️ Fetching docker-compose.yml..."
+            echo "⬇️ Fetching latest docker-compose.yml..."
             curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
 
-            echo "🛑 Stopping old containers..."
-            docker-compose down || true
+            echo "🛑 Stopping existing containers..."
+            docker compose down || true
+
+            echo "🌍 Exporting environment variables..."
+            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+            export NEXT_PUBLIC_API_BASE_URL="${{ secrets.NEXT_PUBLIC_API_BASE_URL }}"
+            export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+            export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            export AWS_REGION="${{ secrets.AWS_REGION }}"
+            export AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}"
 
             echo "🚀 Starting new containers..."
-            ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG docker-compose up -d
+            ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG \
+              DATABASE_URL=$DATABASE_URL \
+              NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+              AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+              AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+              AWS_REGION=$AWS_REGION \
+              AWS_S3_BUCKET_NAME=$AWS_S3_BUCKET_NAME \
+              docker compose up -d
 
-            echo "🧪 Verifying deployment..."
+            echo "✅ Verifying containers..."
             docker ps
 
             echo "📄 Tailing logs..."
             docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
             docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
 
-            echo "🌐 App is live at: https://${{ secrets.STAGE_DOMAIN }}"
+            echo "🎉 Stage app deployed at https://${{ secrets.STAGE_DOMAIN }}"
