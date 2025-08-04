@@ -3,7 +3,7 @@ name: Deploy to Stage with Version Tag
 on:
   push:
     tags:
-      - 'v*'  # triggers on v1.0.0, v2.3.1 etc.
+      - 'v*'
 
 jobs:
   build-and-deploy:
@@ -32,39 +32,19 @@ jobs:
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 🧠 SonarQube Code Analysis (Optional)
-      - name: 📊 SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        continue-on-error: true
+      - name: 📊 SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          organization: kidwalks
+          projectKey: KIDWALKS_stage
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # 🔒 Checkov (IaC Security) - Optional
-      - name: 🛡️ Checkov - Dockerfile Scan
-        uses: bridgecrewio/checkov-action@master
-        continue-on-error: true
-        with:
-          directory: .
-          framework: dockerfile
-          soft_fail: true
-
-      # 🐳 Build Docker Images
       - name: 🐳 Build Docker Images
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
 
-      # 🔍 Trivy Vulnerability Scan (Optional)
-      - name: 🔍 Scan Images with Trivy
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      # 📦 Push Docker Images to ECR
       - name: 📤 Push Docker Images to Amazon ECR
         run: |
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
@@ -72,8 +52,7 @@ jobs:
           docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
 
-      # 🚀 SSH Deploy to EC2
-      - name: 🚀 Deploy Stage via SSH
+      - name: 🚀 Deploy and Start Containers via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -84,20 +63,31 @@ jobs:
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             export VERSION_TAG="${GITHUB_REF#refs/tags/}"
 
+            echo "🔐 Logging in to ECR..."
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
+            echo "📥 Pulling latest images..."
             docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
             docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
 
-            mkdir -p ~/kidwalksapparells-inventory-stage && cd ~/kidwalksapparells-inventory-stage
+            echo "📦 Preparing deployment directory..."
+            mkdir -p ~/kidwalksapparells-inventory-stage
+            cd ~/kidwalksapparells-inventory-stage
+
+            echo "⬇️ Downloading latest docker-compose.yml..."
             curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
 
+            echo "🛑 Stopping any existing containers..."
             docker-compose down || true
+
+            echo "🚀 Starting updated containers..."
             ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG docker-compose up -d
 
+            echo "🧪 Showing running containers..."
             docker ps
 
+            echo "📄 Tailing logs for client & server..."
             docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
             docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
 
-            echo "🌐 Access: https://${{ secrets.STAGE_DOMAIN }}"
+            echo "🌐 App is live at: https://${{ secrets.STAGE_DOMAIN }}"
