@@ -3,7 +3,7 @@ name: DevOps Pipeline to Stage with Version Tag
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build-and-deploy:
@@ -42,12 +42,10 @@ jobs:
           export SONAR_SCANNER_HOME=$(pwd)/sonar-scanner-5.0.1.3006-linux
           export PATH="$SONAR_SCANNER_HOME/bin:$PATH"
           sonar-scanner -Dsonar.login=${SONAR_TOKEN}
-
       - name: 🐳 Build Docker Images
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
-
       - name: 🛡️ Trivy Scan (Client)
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
@@ -70,7 +68,6 @@ jobs:
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
           docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
-
       - name: 🚀 Deploy to EC2 via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -81,48 +78,39 @@ jobs:
           script: |
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             export NEXT_PUBLIC_API_BASE_URL="https://${{ secrets.STAGE_DOMAIN }}"
-
             echo "🧹 Cleaning up old stage Docker containers and images..."
             docker ps -a --filter "name=inventory-stage" --format "{{.ID}}" | xargs -r docker rm -f
             docker images --filter=reference="*/inventoryapp-*-stage:*" --format "{{.Repository}}:{{.Tag}}" | xargs -r docker rmi -f
             docker image prune -f || true
             docker container prune -f || true
-
             echo "🔐 Logging into ECR..."
             aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
             aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
             aws configure set region "$AWS_REGION"
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY || { echo "❌ ECR login failed"; exit 1; }
-
             echo "📥 Pulling images..."
             docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG || { echo "❌ Failed to pull client image"; exit 1; }
             docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG || { echo "❌ Failed to pull server image"; exit 1; }
-
             echo "📂 Preparing deployment directory..."
             mkdir -p ~/kidwalksapparells-inventory-stage
             cd ~/kidwalksapparells-inventory-stage
-
             echo "⬇️ Fetching latest docker-compose.yml..."
             curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml || { echo "❌ Failed to fetch docker-compose.yml"; exit 1; }
-
             echo "🧽 Removing existing .env if present..."
             rm -f .env
-
             echo "📝 Creating .env file..."
             cat <<EOF > .env
-VERSION_TAG=${VERSION_TAG}
-DATABASE_URL=${DATABASE_URL}
-NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-ECR_REGISTRY=${ECR_REGISTRY}
-AWS_REGION=${AWS_REGION}
-AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
-EOF
-
+            VERSION_TAG=${VERSION_TAG}
+            DATABASE_URL=${DATABASE_URL}
+            NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+            AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+            ECR_REGISTRY=${ECR_REGISTRY}
+            AWS_REGION=${AWS_REGION}
+            AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
+            EOF
+            AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
             echo "🛑 Stopping existing containers..."
             docker compose down || true
-
             echo "🚀 Starting new containers..."
             if docker compose up -d; then
               echo "✅ Stage containers started successfully."
@@ -130,25 +118,20 @@ EOF
               echo "❌ Failed to start stage containers."
               exit 1
             fi
-
             echo "📄 Tailing logs..."
             docker ps
-
             CLIENT_CONTAINER=$(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
             SERVER_CONTAINER=$(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
-
             if [ -n "$CLIENT_CONTAINER" ]; then
               echo "🧾 Client logs:"
               docker logs --tail=10 $CLIENT_CONTAINER
             else
               echo "⚠️ Client container not found."
             fi
-
             if [ -n "$SERVER_CONTAINER" ]; then
               echo "🧾 Server logs:"
               docker logs --tail=10 $SERVER_CONTAINER
             else
               echo "⚠️ Server container not found."
             fi
-
             echo "🎉 Stage app deployed at: https://${{ secrets.STAGE_DOMAIN }}"
