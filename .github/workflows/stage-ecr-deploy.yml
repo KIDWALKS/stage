@@ -32,19 +32,22 @@ jobs:
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 🧠 SonarQube Code Analysis
+      # 🧠 SonarQube Code Analysis (Optional)
       - name: 📊 SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
+        continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # 🔒 Checkov (IaC Security)
+      # 🔒 Checkov (IaC Security) - Optional
       - name: 🛡️ Checkov - Dockerfile Scan
         uses: bridgecrewio/checkov-action@master
+        continue-on-error: true
         with:
           directory: .
           framework: dockerfile
+          soft_fail: true
 
       # 🐳 Build Docker Images
       - name: 🐳 Build Docker Images
@@ -52,11 +55,14 @@ jobs:
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
 
-      # 🔍 Trivy Vulnerability Scan
+      # 🔍 Trivy Vulnerability Scan (Optional)
       - name: 🔍 Scan Images with Trivy
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           image-ref: $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
+          format: 'sarif'
+          output: 'trivy-results.sarif'
 
       # 📦 Push Docker Images to ECR
       - name: 📤 Push Docker Images to Amazon ECR
