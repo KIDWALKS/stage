@@ -32,13 +32,15 @@ jobs:
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 📊 SonarCloud Scan
+      - name: 📊 SonarCloud Scan (with sonar-project.properties)
         continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
           unzip sonar-scanner-cli-*.zip
           export PATH="$PATH:$(pwd)/sonar-scanner-*/bin"
-          sonar-scanner -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+          sonar-scanner -Dsonar.login=${SONAR_TOKEN}
 
       - name: 🐳 Build Docker Images
         run: |
@@ -47,21 +49,3 @@ jobs:
 
       - name: 📤 Push Docker Images to Amazon ECR
         run: |
-          docker push $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
-          docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
-          docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
-          docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
-
-      - name: 🚀 Deploy and Start Containers via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          script: |
-            export AWS_REGION="${{ secrets.AWS_REGION }}"
-            export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
-            export VERSION_TAG="${GITHUB_REF#refs/tags/}"
-
-            echo "🔐 Logging in to ECR..."
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS_
