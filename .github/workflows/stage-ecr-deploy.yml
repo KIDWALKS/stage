@@ -77,9 +77,10 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          envs: VERSION_TAG,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,DATABASE_URL,NEXT_PUBLIC_API_BASE_URL,AWS_S3_BUCKET_NAME
+          envs: VERSION_TAG,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,DATABASE_URL,AWS_S3_BUCKET_NAME
           script: |
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
+            export NEXT_PUBLIC_API_BASE_URL="https://${{ secrets.STAGE_DOMAIN }}"
 
             echo "🔐 Logging into ECR..."
             aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
