@@ -81,8 +81,15 @@ jobs:
             export VERSION_TAG="${GITHUB_REF#refs/tags/}"
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
 
+            echo "📦 Installing AWS CLI..."
+            curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            sudo ./aws/install || true
+
             echo "🔐 Logging into ECR..."
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY || {
+              echo "❌ ECR login failed"; exit 1;
+            }
 
             echo "📥 Pulling images..."
             docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG || { echo "❌ Failed to pull client image"; exit 1; }
