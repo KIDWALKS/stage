@@ -110,15 +110,15 @@ jobs:
 
             echo "📝 Creating .env file..."
             cat <<EOF > .env
-            VERSION_TAG=${VERSION_TAG}
-            DATABASE_URL=${DATABASE_URL}
-            NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-            AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-            ECR_REGISTRY=${ECR_REGISTRY}
-            AWS_REGION=${AWS_REGION}
-            AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
-            EOF
-            AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+VERSION_TAG=${VERSION_TAG}
+DATABASE_URL=${DATABASE_URL}
+NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+ECR_REGISTRY=${ECR_REGISTRY}
+AWS_REGION=${AWS_REGION}
+AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
+EOF
 
             echo "🛑 Stopping existing containers..."
             docker compose down || true
