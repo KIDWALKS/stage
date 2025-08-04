@@ -33,14 +33,12 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: 📊 SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
         continue-on-error: true
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.organization=kidwalks
-            -Dsonar.projectKey=KIDWALKS_stage
+        run: |
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-*.zip
+          export PATH="$PATH:$(pwd)/sonar-scanner-*/bin"
+          sonar-scanner -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
       - name: 🐳 Build Docker Images
         run: |
@@ -66,30 +64,4 @@ jobs:
             export VERSION_TAG="${GITHUB_REF#refs/tags/}"
 
             echo "🔐 Logging in to ECR..."
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-
-            echo "📥 Pulling latest images..."
-            docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
-            docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
-
-            echo "📦 Preparing deployment directory..."
-            mkdir -p ~/kidwalksapparells-inventory-stage
-            cd ~/kidwalksapparells-inventory-stage
-
-            echo "⬇️ Downloading latest docker-compose.yml..."
-            curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
-
-            echo "🛑 Stopping any existing containers..."
-            docker-compose down || true
-
-            echo "🚀 Starting updated containers..."
-            ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG docker-compose up -d
-
-            echo "🧪 Showing running containers..."
-            docker ps
-
-            echo "📄 Tailing logs for client & server..."
-            docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
-            docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
-
-            echo "🌐 App is live at: https://${{ secrets.STAGE_DOMAIN }}"
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS_
