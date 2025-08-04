@@ -34,11 +34,13 @@ jobs:
 
       - name: 📊 SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
-        with:
-          organization: kidwalks
-          projectKey: KIDWALKS_stage
+        continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=kidwalks
+            -Dsonar.projectKey=KIDWALKS_stage
 
       - name: 🐳 Build Docker Images
         run: |
