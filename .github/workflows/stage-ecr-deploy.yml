@@ -1,4 +1,4 @@
-name: Deploy to Stage with Version Tag
+name: DevOps Pipeline to Stage with Version Tag
 
 on:
   push:
@@ -85,15 +85,15 @@ jobs:
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
 
             echo "📥 Pulling images..."
-            docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
-            docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
+            docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG || { echo "❌ Failed to pull client image"; exit 1; }
+            docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG || { echo "❌ Failed to pull server image"; exit 1; }
 
             echo "📂 Preparing deployment directory..."
             mkdir -p ~/kidwalksapparells-inventory-stage
             cd ~/kidwalksapparells-inventory-stage
 
             echo "⬇️ Fetching latest docker-compose.yml..."
-            curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
+            curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml || { echo "❌ Failed to fetch docker-compose.yml"; exit 1; }
 
             echo "🛑 Stopping existing containers..."
             docker compose down || true
@@ -107,20 +107,39 @@ jobs:
             export AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}"
 
             echo "🚀 Starting new containers..."
-            ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG \
+            if ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG \
               DATABASE_URL=$DATABASE_URL \
               NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
               AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
               AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
               AWS_REGION=$AWS_REGION \
               AWS_S3_BUCKET_NAME=$AWS_S3_BUCKET_NAME \
-              docker compose up -d
+              docker compose up -d; then
+              echo "✅ Stage containers started successfully."
+            else
+              echo "❌ Failed to start stage containers."
+              exit 1
+            fi
 
             echo "✅ Verifying containers..."
             docker ps
 
             echo "📄 Tailing logs..."
-            docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
-            docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
+            CLIENT_CONTAINER=$(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
+            SERVER_CONTAINER=$(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
 
-            echo "🎉 Stage app deployed at https://${{ secrets.STAGE_DOMAIN }}"
+            if [ -n "$CLIENT_CONTAINER" ]; then
+              echo "🧾 Client logs:"
+              docker logs --tail=10 $CLIENT_CONTAINER
+            else
+              echo "⚠️ Client container not found."
+            fi
+
+            if [ -n "$SERVER_CONTAINER" ]; then
+              echo "🧾 Server logs:"
+              docker logs --tail=10 $SERVER_CONTAINER
+            else
+              echo "⚠️ Server container not found."
+            fi
+
+            echo "🎉 Stage app deployed at: https://${{ secrets.STAGE_DOMAIN }}"
