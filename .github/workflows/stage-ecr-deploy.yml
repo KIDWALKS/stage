@@ -77,9 +77,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,DATABASE_URL,NEXT_PUBLIC_API_BASE_URL,AWS_S3_BUCKET_NAME
+          envs: VERSION_TAG,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,DATABASE_URL,NEXT_PUBLIC_API_BASE_URL,AWS_S3_BUCKET_NAME
           script: |
-            export VERSION_TAG="${GITHUB_REF#refs/tags/}"
             export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
 
             echo "🔐 Logging into ECR..."
