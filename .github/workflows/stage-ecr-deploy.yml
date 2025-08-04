@@ -38,8 +38,9 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-          unzip sonar-scanner-cli-*.zip
-          export PATH="$PATH:$(pwd)/sonar-scanner-*/bin"
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+          export SONAR_SCANNER_HOME=$(pwd)/sonar-scanner-5.0.1.3006-linux
+          export PATH="$SONAR_SCANNER_HOME/bin:$PATH"
           sonar-scanner -Dsonar.login=${SONAR_TOKEN}
 
       - name: 🐳 Build Docker Images
@@ -47,5 +48,65 @@ jobs:
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
 
+      - name: 🛡️ Run Trivy Vulnerability Scan (Client)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.CLIENT_IMAGE }}:${{ env.VERSION_TAG }}
+          format: table
+          severity: CRITICAL,HIGH
+
+      - name: 🛡️ Run Trivy Vulnerability Scan (Server)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.SERVER_IMAGE }}:${{ env.VERSION_TAG }}
+          format: table
+          severity: CRITICAL,HIGH
+
       - name: 📤 Push Docker Images to Amazon ECR
         run: |
+          docker push $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
+          docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
+          docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
+          docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
+
+      - name: 🚀 Deploy and Start Containers via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            export AWS_REGION="${{ secrets.AWS_REGION }}"
+            export ECR_REGISTRY="${{ secrets.ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
+            export VERSION_TAG="${GITHUB_REF#refs/tags/}"
+
+            echo "🔐 Logging into ECR..."
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            echo "📥 Pulling images..."
+            docker pull $ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG
+            docker pull $ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG
+
+            echo "📂 Preparing deployment..."
+            mkdir -p ~/kidwalksapparells-inventory-stage
+            cd ~/kidwalksapparells-inventory-stage
+
+            echo "⬇️ Fetching docker-compose.yml..."
+            curl -s -o docker-compose.yml https://raw.githubusercontent.com/KIDWALKS/stage/main/docker-compose.yml
+
+            echo "🛑 Stopping old containers..."
+            docker-compose down || true
+
+            echo "🚀 Starting new containers..."
+            ECR_REGISTRY=$ECR_REGISTRY VERSION_TAG=$VERSION_TAG docker-compose up -d
+
+            echo "🧪 Verifying deployment..."
+            docker ps
+
+            echo "📄 Tailing logs..."
+            docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-client-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
+            docker logs --tail=10 $(docker ps --filter ancestor=$ECR_REGISTRY/inventoryapp-server-stage:$VERSION_TAG --format "{{.Names}}" | head -n1)
+
+            echo "🌐 App is live at: https://${{ secrets.STAGE_DOMAIN }}"
