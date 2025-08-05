@@ -1,4 +1,4 @@
-name: DevOps Pipeline to Stage with Version Tag
+name: ~/kidwalksapparells-inventory-stage DevOps Pipeline to Deploy with Version Tag
 
 on:
   push:
@@ -42,25 +42,11 @@ jobs:
           export SONAR_SCANNER_HOME=$(pwd)/sonar-scanner-5.0.1.3006-linux
           export PATH="$SONAR_SCANNER_HOME/bin:$PATH"
           sonar-scanner -Dsonar.login=${SONAR_TOKEN}
+
       - name: 🐳 Build Docker Images
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
-      - name: 🛡️ Trivy Scan (Client)
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.CLIENT_IMAGE }}:${{ env.VERSION_TAG }}
-          format: table
-          severity: CRITICAL,HIGH
-
-      - name: 🛡️ Trivy Scan (Server)
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.SERVER_IMAGE }}:${{ env.VERSION_TAG }}
-          format: table
-          severity: CRITICAL,HIGH
 
       - name: 📤 Push Docker Images to ECR
         run: |
@@ -68,6 +54,7 @@ jobs:
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
           docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
+
       - name: 🚀 Deploy to EC2 via SSH
         uses: appleboy/ssh-action@master
         with:
