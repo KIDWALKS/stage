@@ -32,7 +32,7 @@ jobs:
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 📊 SonarCloud Scan (optional)
+      - name: 📊 SonarCloud Scan (Abdullah)
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
