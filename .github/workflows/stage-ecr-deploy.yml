@@ -32,7 +32,7 @@ jobs:
       - name: 🔐 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 📊 SonarCloud Scan (Abdullah)
+      - name: 📊 SonarCloud Scan (optional)
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -42,19 +42,16 @@ jobs:
           export SONAR_SCANNER_HOME=$(pwd)/sonar-scanner-5.0.1.3006-linux
           export PATH="$SONAR_SCANNER_HOME/bin:$PATH"
           sonar-scanner -Dsonar.login=${SONAR_TOKEN}
-
       - name: 🐳 Build Docker Images
         run: |
           docker build -t $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$CLIENT_IMAGE:latest -f client/Dockerfile .
           docker build -t $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG -t $ECR_REGISTRY/$SERVER_IMAGE:latest -f server/Dockerfile .
-
       - name: 📤 Push Docker Images to ECR
         run: |
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$CLIENT_IMAGE:latest
           docker push $ECR_REGISTRY/$SERVER_IMAGE:$VERSION_TAG
           docker push $ECR_REGISTRY/$SERVER_IMAGE:latest
-
       - name: 🚀 Deploy to EC2 via SSH
         uses: appleboy/ssh-action@master
         with:
